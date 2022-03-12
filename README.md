@@ -82,6 +82,8 @@ Since I think the point of this is to demonstrate experience and proficiency wit
 
 I usually would go for the simplest thing that could work first, but instead of writing the entire store to disk with every `put` I will partition the store. However, I will side-step any complexity about re-partitioning.
 
+I’m using Clojure’s EDN encoding, which is not ideal in terms of space and performance. This is certainly something that can be improved. However, the upside is the files on disk are human readable.
+
 ## Results
 
 The performance of the kv store (particularly `put`) depends on how many partitions it has. I ran several tests with different partitions and here is the best out of three for each of 1 partition, 10 partitions, and 100 partitions, where there are 100 threads writing to the store. Each thread performs a `put` then a `get` 100 times in succession (see `t-concurrent-operations`).
