@@ -136,8 +136,8 @@
            "thread-count %d"
            "op-count %d"
            "total-time %d msecs"
-           "avg-put-latency %f"
-           "avg-get-latency %f"
+           "avg-put-latency %f msecs"
+           "avg-get-latency %f msecs"
            "throughput %f ops/msec\n"])
         partition-count
         thread-count

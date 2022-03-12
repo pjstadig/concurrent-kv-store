@@ -24,9 +24,10 @@ Some particulars are not described by the requirements, so I’m making assumpti
 
 1. If a client performs a `get` operation for a key that does not exist they will receive an exception.
 2. There’s no restriction specified for the length of keys or values nor is there a `delete` operation. I will place limits on the size of keys and values, but will allow the store to grow to an arbitrary size in memory and on disk.
-3. There is no restriction on the types of values that can be stored. Not every value can be persisted (for example, network connections or locks). I will restrict the types of values to those that can be marshaled to and from disk.
+3. In the requirements, there is no restriction on the types of values that can be stored. However, not every value can be persisted (for example, a network connection). I will not restrict the types of values that can be stored, but an exception may occur if a value cannot be marshaled to and from disk.
 4. There’s no specification for fairness. If two threads are in contention to `put`, which thread wins? I’m assuming thread starvation is undesirable so the longest waiting thread should be chosen.
-5. There’s no explicit definition of what “before” means. I’m going to lean on the Java Memory Model which defines a happens-before relation.
+5. There’s no explicit definition in the requirements of what “before” means. I’m going to lean on the Java Memory Model which defines a happens-before relation.
+6. I’m assuming no other processes are reading/writing the store files. I am not verifying their integrity (other than attempting to read them), nor am I using any file locks.
 
 ## Commentary
 
@@ -56,7 +57,8 @@ Apart from the concurrency issues, the durability requirements can add their own
 
 Writing to a backing file with each `put` will greatly increase the latency of `put` operations. Especially if the kv store is writing out all of the key-value pairs to disk with every `put`. There come to mind a couple of ways to improve this:
 1. Use a write ahead log. There would be a persistent “current” version of all the values in the kv store and a log of changes that have happened since. An append only write ahead log would be relatively cheaper to write to, but you would have to merge the log into the “current” version either upon initializing the kv store or with some background thread.
-2. Partition the kv store. This is not mutually exclusive with the first. The kv store would be partitioned (for example, modulo of a hash of the value) so only one partition of values would have to be written at a time, and multiple partitions could make progress simultaneously. This brings with it complications about how a re-partition process would work and whether the kv store should automatically re-partition. Also if the partition algorithm is changed all the data must be repartitioned after reading from disk.
+2. Batch writes to disk. This could be done by gathering pending writes but parking the writer threads until the writes can be flushed to both the in-memory and file store, then releasing them.
+2. Partition the kv store. This is not mutually exclusive with the first two. The kv store would be partitioned (for example, modulo of a hash of the value) so only one partition of values would have to be written at a time, and multiple partitions could make progress simultaneously. This brings with it complications about how a re-partition process would work and whether the kv store should automatically re-partition. Also if the partition algorithm is changed all the data must be repartitioned after reading from disk.
 
 The decisions you make here are driven by whether latency or throughput is more important, and the requirements are not specific about that.
 
@@ -71,3 +73,33 @@ Another approach would be to write example or scenario based tests where you com
 Since I think the point of this is to demonstrate experience and proficiency with low-level concurrency primitives, I think it would be cheating to use Clojure’s reference types, so I will opt to use `java.util.concurrent.locks*`.
 
 I usually would go for the simplest thing that could work first, but instead of writing the entire store to disk with every `put` I will partition the store. However, I will side-step any complexity about re-partitioning.
+
+## Results
+
+The performance of the kv store (particularly `put`) depends on how many partitions it has. I ran several tests with different partitions and here is the best out of three for each of 1 partition, 10 partitions, and 100 partitions, where there are 100 threads writing to the store. Each thread performs a `put` then a `get` 100 times in succession (see `t-concurrent-operations`).
+
+```
+partition-count 1
+thread-count 100
+op-count 100
+total-time 2254 msecs
+avg-put-latency 22.379000 msecs
+avg-get-latency 0.001400 msecs
+throughput 2.218279 ops/msec
+
+partition-count 10
+thread-count 100
+op-count 100
+total-time 263 msecs
+avg-put-latency 1.854500 msecs
+avg-get-latency 0.003900 msecs
+throughput 19.011407 ops/msec
+
+partition-count 100
+thread-count 100
+op-count 100
+total-time 173 msecs
+avg-put-latency 0.373700 msecs
+avg-get-latency 0.004500 msecs
+throughput 28.901734 ops/msec
+```
