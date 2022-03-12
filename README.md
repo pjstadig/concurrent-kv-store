@@ -1,5 +1,13 @@
 # concurrent-kv-store
 
+## Running
+
+Assuming you have the `clojure` command-line tool installed, you should be able to run
+
+```
+./bin/test
+```
+
 ## Requirements
 
 Implement a concurrent, persistent key-value store with a slightly write-heavy workload. Expect a few operations per millisecond and values up to a few hundred kilobytes.
